@@ -1,0 +1,13 @@
+.venv/
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+tests/
+examples/
+README.md
+requirements-lock.txt
