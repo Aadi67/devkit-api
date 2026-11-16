@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fastapi.encoders import jsonable_encoder
+from app.rate_limit import RateLimitMiddleware
 
 MAX_REQUEST_SIZE = 128 * 1024  # 128 KB
 
@@ -83,6 +84,12 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestSizeLimitMiddleware)
+
+app.add_middleware(
+    RateLimitMiddleware,
+    limit=60,
+    window_seconds=60
+)
 
 
 # --------------------------------------------------

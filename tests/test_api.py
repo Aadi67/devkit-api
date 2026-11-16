@@ -118,3 +118,33 @@ def test_large_request_rejected():
 
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_rate_limit():
+    from fastapi.testclient import TestClient
+
+    # Use an isolated client IP for this test.
+    with TestClient(
+        app,
+        client=("198.51.100.10", 12345)
+    ) as limited_client:
+
+        for _ in range(60):
+            response = limited_client.post(
+                "/v1/uuid",
+                json={"count": 1}
+            )
+            assert response.status_code == 200
+
+        response = limited_client.post(
+            "/v1/uuid",
+            json={"count": 1}
+        )
+
+        assert response.status_code == 429
+        assert response.json()["error"]["code"] == (
+            "RATE_LIMIT_EXCEEDED"
+        )
+        assert response.headers["x-ratelimit-limit"] == "60"
+        assert response.headers["x-ratelimit-remaining"] == "0"
+        assert "retry-after" in response.headers
