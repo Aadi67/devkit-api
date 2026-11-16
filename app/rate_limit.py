@@ -33,8 +33,11 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        headers = dict(scope.get("headers", []))
+        cf_ip = headers.get(b"cf-connecting-ip", b"").decode("latin-1").strip()
+
         client = scope.get("client")
-        client_ip = client[0] if client else "unknown"
+        client_ip = cf_ip or (client[0] if client else "unknown")
 
         now = int(time.time())
         window = now // self.window_seconds
