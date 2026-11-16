@@ -78,7 +78,7 @@ app = FastAPI(
         "Free developer utilities for JSON processing, "
         "hashing and UUID generation."
     ),
-    version="1.0.0",
+    version="1.1.0",
     contact={"name": "DevKit API"},
     license_info={"name": "MIT"},
 )

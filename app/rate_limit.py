@@ -28,17 +28,23 @@ class RateLimitMiddleware:
 
         path = scope.get("path", "")
 
-        # Exclude health checks from rate limiting.
+        # Exclude non-API routes and health checks.
         if not path.startswith("/v1/") or path == "/v1/health":
             await self.app(scope, receive, send)
             return
 
-        headers = dict(scope.get("headers", []))
-        cf_ip = headers.get(b"cf-connecting-ip", b"").decode("latin-1").strip()
+        # Identify the client IP.
+        request_headers = dict(scope.get("headers", []))
+        cf_ip = (
+            request_headers.get(b"cf-connecting-ip", b"")
+            .decode("latin-1")
+            .strip()
+        )
 
         client = scope.get("client")
         client_ip = cf_ip or (client[0] if client else "unknown")
 
+        # Calculate fixed time window.
         now = int(time.time())
         window = now // self.window_seconds
         reset_at = (window + 1) * self.window_seconds
@@ -52,10 +58,9 @@ class RateLimitMiddleware:
                 count = entry[1] + 1
 
             self.requests[client_ip] = (window, count)
-
             self.request_counter += 1
 
-            # Periodically remove expired client entries.
+            # Periodically remove expired entries.
             if self.request_counter % 1000 == 0:
                 self.requests = {
                     ip: value
@@ -66,19 +71,24 @@ class RateLimitMiddleware:
             allowed = count <= self.limit
             remaining = max(0, self.limit - count)
 
-        headers = {
-            "X-RateLimit-Limit": str(self.limit),
-            "X-RateLimit-Remaining": str(remaining),
-            "X-RateLimit-Reset": str(reset_at),
-        }
+        # Standard rate-limit response headers.
+        rate_limit_headers = [
+            (b"x-ratelimit-limit", str(self.limit).encode()),
+            (b"x-ratelimit-remaining", str(remaining).encode()),
+            (b"x-ratelimit-reset", str(reset_at).encode()),
+        ]
 
         if not allowed:
             retry_after = max(1, reset_at - now)
-            headers["Retry-After"] = str(retry_after)
 
             response = JSONResponse(
                 status_code=429,
-                headers=headers,
+                headers={
+                    "X-RateLimit-Limit": str(self.limit),
+                    "X-RateLimit-Remaining": str(remaining),
+                    "X-RateLimit-Reset": str(reset_at),
+                    "Retry-After": str(retry_after),
+                },
                 content={
                     "success": False,
                     "error": {
@@ -91,4 +101,13 @@ class RateLimitMiddleware:
             await response(scope, receive, send)
             return
 
-        await self.app(scope, receive, send)
+        # Add rate-limit headers to successful responses.
+        async def send_with_rate_limit_headers(message):
+            if message["type"] == "http.response.start":
+                response_headers = list(message.get("headers", []))
+                response_headers.extend(rate_limit_headers)
+                message["headers"] = response_headers
+
+            await send(message)
+
+        await self.app(scope, receive, send_with_rate_limit_headers)
