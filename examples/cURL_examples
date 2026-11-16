@@ -1,0 +1,12 @@
+# Health check
+curl http://127.0.0.1:8000/v1/health
+
+# JSON validation
+curl -X POST http://127.0.0.1:8000/v1/json/validate \
+  -H "Content-Type: application/json" \
+  -d '{"content":"{\"hello\":\"world\"}"}'
+
+# Generate UUIDs
+curl -X POST http://127.0.0.1:8000/v1/uuid \
+  -H "Content-Type: application/json" \
+  -d '{"count":3}'
